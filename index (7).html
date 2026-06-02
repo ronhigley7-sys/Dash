@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3b3c Stroke Telemetry – Float & Sitter Board</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #f0f4f8;
+  --white: #ffffff;
+  --teal-header: #006d77;
+  --teal-dark: #005a63;
+  --teal-row: #b2d8dc;
+  --teal-alt: #d6eef0;
+  --teal-highlight: #7ec8cf;
+  --text: #1a1a2e;
+  --text-mid: #3d4f60;
+  --text-light: #6b7f90;
+  --border: #c5d8de;
+  --border-dark: #9bbdc5;
+  --shadow: 0 2px 8px rgba(0,109,119,0.10);
+  --radius: 6px;
+  --admin-accent: #e63946;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  min-height: 100vh;
+}
+
+.topbar {
+  background: var(--teal-header);
+  color: white;
+  padding: 0 24px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.topbar-title { font-size: 18px; font-weight: 700; letter-spacing: 0.01em; }
+.topbar-right { display: flex; align-items: center; gap: 12px; font-size: 12px; }
+.topbar-time { font-family: 'JetBrains Mono', monospace; font-size: 11px; opacity: 0.85; }
+
+.mode-toggle {
+  display: flex;
+  background: rgba(255,255,255,0.15);
+  border-radius: 20px;
+  padding: 2px;
+  gap: 2px;
+}
+.mode-btn {
+  padding: 4px 14px;
+  border-radius: 16px;
+  border: none;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+  color: rgba(255,255,255,0.7);
+  transition: all 0.2s;
+}
+.mode-btn.active {
+  background: white;
+  color: var(--teal-header);
+}
+
+.auth-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+}
+.auth-overlay.open { display: flex; }
+.auth-box {
+  background: white;
+  border-radius: 12px;
+  padding: 32px 36px;
+  width: 340px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  text-align: center;
+}
+.auth-box h2 { font-size: 17px; font-weight: 700; margin-bottom: 6px; color: var(--teal-header); }
+.auth-box p { font-size: 12px; color: var(--text-light); margin-bottom: 20px; }
+.auth-input {
+  width: 100%; padding: 10px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  margin-bottom: 12px;
+  outline: none;
+  text-align: center;
+  letter-spacing: 4px;
+}
+.auth-input:focus { border-color: var(--teal-header); }
+.auth-error { color: var(--admin-accent); font-size: 12px; margin-bottom: 10px; min-height: 16px; }
+.auth-btns { display: flex; gap: 8px; }
+.btn {
+  flex: 1; padding: 10px;
+  border-radius: 8px;
+  border: none;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-primary { background: var(--teal-header); color: white; }
+.btn-primary:hover { background: var(--teal-dark); }
+.btn-ghost { background: var(--bg); color: var(--text-mid); }
+.btn-ghost:hover { background: var(--border); }
+.btn-red { background: #fee2e2; color: var(--admin-accent); }
+.btn-red:hover { background: #fecaca; }
+
+.page-wrap { padding: 20px 24px; }
+
+.admin-banner {
+  display: none;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  padding: 8px 16px;
+  margin-bottom: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #664d03;
+  align-items: center;
+  justify-content: space-between;
+}
+.admin-banner.show { display: flex; }
+.admin-banner span { display: flex; align-items: center; gap: 6px; }
+
+.last-updated {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-light);
+  margin-bottom: 16px;
+  font-style: italic;
+}
+
+.board-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.section-wrap { }
+.section-label {
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--teal-dark);
+  margin-bottom: 6px;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  font-size: 12px;
+}
+.data-table th {
+  background: var(--teal-header);
+  color: white;
+  padding: 7px 10px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.data-table th:first-child { border-radius: 0; }
+.data-table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tbody tr:nth-child(even) td { background: var(--teal-alt); }
+.data-table tbody tr:hover td { background: var(--teal-row) !important; cursor: default; }
+.data-table tr.highlighted td { background: var(--teal-row) !important; }
+
+.date-cell {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-mid);
+}
+.dash-cell { color: var(--text-light); text-align: center; }
+
+.admin-mode .editable-cell {
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background 0.1s;
+}
+.admin-mode .editable-cell:hover {
+  background: #e0f2f4 !important;
+  outline: 1px dashed var(--teal-header);
+}
+.inline-editor {
+  background: white;
+  border: 1.5px solid var(--teal-header);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  width: 110px;
+  outline: none;
+}
+
+.sort-arrow { cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 4px; }
+.sort-arrow::after { content: ' ↕'; font-size: 9px; opacity: 0.6; }
+.sort-arrow.asc::after { content: ' ↑'; opacity: 1; }
+.sort-arrow.desc::after { content: ' ↓'; opacity: 1; }
+
+.updates-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin-top: 6px;
+}
+.update-panel {
+  background: white;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.update-panel-header {
+  background: var(--teal-header);
+  color: white;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.update-row {
+  display: grid;
+  grid-template-columns: 1.4fr 0.8fr 1fr;
+  padding: 5px 14px;
+  font-size: 11px;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+}
+.update-row:last-child { border-bottom: none; }
+.update-row:nth-child(even) { background: var(--teal-alt); }
+.update-name { font-weight: 500; color: var(--text); }
+.update-type { color: var(--teal-dark); font-weight: 600; }
+.update-time { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-light); text-align: right; }
+
+.admin-add-panel {
+  display: none;
+  background: white;
+  border: 2px solid var(--teal-header);
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+}
+.admin-add-panel.show { display: block; }
+.admin-add-title {
+  font-size: 13px; font-weight: 700;
+  color: var(--teal-header);
+  margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.add-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+.form-group label {
+  display: block;
+  font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-light);
+  margin-bottom: 4px;
+}
+.form-group input, .form-group select {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  outline: none;
+  background: white;
+  color: var(--text);
+}
+.form-group input:focus, .form-group select:focus { border-color: var(--teal-header); }
+.add-btns { display: flex; gap: 8px; margin-top: 12px; }
+.add-btns .btn { flex: none; padding: 8px 18px; font-size: 12px; }
+
+.toast {
+  position: fixed; bottom: 20px; right: 20px;
+  background: var(--teal-header); color: white;
+  padding: 10px 18px; border-radius: 8px;
+  font-size: 13px; font-weight: 600;
+  transform: translateY(60px); opacity: 0;
+  transition: all 0.25s; z-index: 300;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+
+@media (max-width: 1100px) {
+  .board-grid, .updates-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 700px) {
+  .board-grid, .updates-grid { grid-template-columns: 1fr; }
+  .topbar-title { font-size: 14px; }
+}
+  .sync-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0;}
+  .sync-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:500;display:flex;align-items:center;justify-content:center;}
+  .sync-box{background:white;color:var(--text);border-radius:12px;padding:28px 32px;width:520px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.4);}
+  .sync-box h2{font-size:16px;font-weight:700;color:var(--teal-header);margin-bottom:4px;}
+  .sync-box p{font-size:12px;color:var(--text-light);margin-bottom:18px;}
+  .sync-field{margin-bottom:12px;}
+  .sync-field label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-light);margin-bottom:4px;}
+  .sync-field input{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;outline:none;background:white;color:var(--text);box-sizing:border-box;}
+  .sync-field input:focus{border-color:var(--teal-header);}
+  .sync-sql{background:#f1f5f9;border-radius:6px;padding:10px 12px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#334155;line-height:1.7;cursor:pointer;margin:10px 0;border:1px solid #e2e8f0;white-space:pre;}
+  .sync-result{font-size:12px;min-height:18px;margin:10px 0;}
+  .sync-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:8px;}
+  .sync-step{background:rgba(0,109,119,0.06);border:1px solid rgba(0,109,119,0.18);border-radius:8px;padding:12px 14px;font-size:11px;line-height:1.8;color:var(--text-mid);margin-bottom:14px;}
+  .sync-step strong{color:var(--teal-header);}
+  @media print{.sync-overlay,.sync-box,#sb-badge{display:none!important;}}
+</style>
+</head>
+<body>
+
+<!-- AUTH OVERLAY -->
+<div class="auth-overlay" id="authOverlay">
+  <div class="auth-box">
+    <h2>🔒 Admin Access</h2>
+    <p>Enter your PIN to enable editing</p>
+    <input type="password" class="auth-input" id="pinInput" maxlength="6" placeholder="• • • •" onkeydown="if(event.key==='Enter')tryLogin()">
+    <div class="auth-error" id="authError"></div>
+    <div class="auth-btns">
+      <button class="btn btn-ghost" onclick="closeAuth()">Cancel</button>
+      <button class="btn btn-primary" onclick="tryLogin()">Unlock</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-title">3b3c Stroke Telemetry – Float &amp; Sitter Board</div>
+  <div class="topbar-right">
+    <div id="sb-badge" onclick="showSyncSetup()" title="Supabase sync status" style="cursor:pointer;font-size:11px;display:flex;align-items:center;gap:5px;"></div>
+    <span class="topbar-time" id="clockDisplay"></span>
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="btnStaff" onclick="setMode('staff')">👁 Staff View</button>
+      <button class="mode-btn" id="btnAdmin" onclick="setMode('admin')">✏ Admin</button>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN CONTENT -->
+<div class="page-wrap">
+
+  <!-- Admin Banner -->
+  <div class="admin-banner" id="adminBanner">
+    <span>🛡 Admin Mode — You can edit dates and add entries. Click any date cell to edit.</span>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-ghost" style="flex:none;padding:5px 14px;font-size:11px;" onclick="toggleAddPanel()">+ Add Entry</button>
+      <button class="btn btn-red" style="flex:none;padding:5px 14px;font-size:11px;" onclick="exitAdmin()">Exit Admin</button>
+    </div>
+  </div>
+
+  <!-- Admin Add Entry Panel -->
+  <div class="admin-add-panel" id="addPanel">
+    <div class="admin-add-title">✚ Log New Event</div>
+    <div class="add-form-grid">
+      <div class="form-group">
+        <label>Role Group</label>
+        <select id="addRole" onchange="populateNameDropdown()">
+          <option value="RN">RN</option>
+          <option value="LPN">LPN</option>
+          <option value="CA">CA</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Staff Name</label>
+        <select id="addName"></select>
+      </div>
+      <div class="form-group">
+        <label>Event Type</label>
+        <select id="addType">
+          <option>Float</option>
+          <option>Sitter</option>
+          <option>Call Off</option>
+          <option>Mandation</option>
+          <option>Refusal</option>
+          <option>LPN as CA</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Date</label>
+        <input type="date" id="addDate">
+      </div>
+    </div>
+    <div class="add-btns">
+      <button class="btn btn-primary" onclick="submitNewEntry()">✓ Save Entry</button>
+      <button class="btn btn-ghost" onclick="toggleAddPanel()">Cancel</button>
+    </div>
+  </div>
+
+  <div class="last-updated" id="lastUpdatedLabel"></div>
+
+  <!-- BOARD TABLES -->
+  <div class="board-grid">
+
+    <!-- RN TABLE -->
+    <div class="section-wrap">
+      <div class="section-label">RN Staff</div>
+      <table class="data-table" id="rnTable">
+        <thead>
+          <tr>
+            <th><span class="sort-arrow" onclick="sortTable('rn','name')">RN Staff</span></th>
+            <th><span class="sort-arrow" onclick="sortTable('rn','float')">Last Float Date</span></th>
+            <th><span class="sort-arrow" onclick="sortTable('rn','sitter')">Last Sitter Date</span></th>
+            <th><span class="sort-arrow" onclick="sortTable('rn','calloff')">Last Call Off</span></th>
+          </tr>
+        </thead>
+        <tbody id="rnBody"></tbody>
+      </table>
+    </div>
+
+    <!-- LPN TABLE -->
+    <div class="section-wrap">
+      <div class="section-label">LPN Staff</div>
+      <table class="data-table" id="lpnTable">
+        <thead>
+          <tr>
+            <th><span class="sort-arrow" onclick="sortTable('lpn','name')">LPN Staff</span></th>
+            <th><span class="sort-arrow" onclick="sortTable('lpn','float')">Last Float Date</span></th>
+            <th><span class="sort-arrow" onclick="sortTable('lpn','sitter')">Last Sitter Date</span></th>
+            <th><span class="sort-arrow" onclick="sortTable('lpn','lpnca')">LPN as CA</span></th>
+            <th><span class="sort-arrow" onclick="sortTable('lpn','calloff')">Last Call off</span></th>
+          </tr>
+        </thead>
+        <tbody id="lpnBody"></tbody>
+      </table>
+
+      <!-- LPN Updates -->
+      <div style="margin-top:14px;">
+        <div class="update-panel">
+          <div class="update-panel-header">Last LPN Updates</div>
+          <div id="lpnUpdates"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CA TABLE -->
+    <div class="section-wrap">
+      <div class="section-label">CA Staff</div>
+      <table class="data-table" id="caTable">
+        <thead>
+          <tr>
+            <th><span class="sort-arrow" onclick="sortTable('ca','name')">CA Staff</span></th>
+            <th><span class="sort-arrow" onclick="sortTable('ca','float')">Last Float Date</span></th>
+            <th><span class="sort-arrow" onclick="sortTable('ca','sitter')">Last Sitter Date</span></th>
+            <th><span class="sort-arrow" onclick="sortTable('ca','calloff')">Last Call Off</span></th>
+            <th><span class="sort-arrow" onclick="sortTable('ca','mandation')">Last Mandation</span></th>
+            <th><span class="sort-arrow" onclick="sortTable('ca','refusal')">Last Refusal</span></th>
+          </tr>
+        </thead>
+        <tbody id="caBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- UPDATES ROW -->
+  <div class="updates-grid">
+    <div class="update-panel">
+      <div class="update-panel-header">Last RN Updates</div>
+      <div id="rnUpdates"></div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:center;">
+      <div style="text-align:center;color:var(--text-light);font-size:11px;" id="statsBlock"></div>
+    </div>
+    <div class="update-panel">
+      <div class="update-panel-header">Last CA Updates</div>
+      <div id="caUpdates"></div>
+    </div>
+  </div>
+
+</div><!-- /page-wrap -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════
+//  DATA STORE
+// ══════════════════════════════════════════
+const STORAGE_KEY = 'fsb_3b3c_data';
+const ADMIN_PIN   = '1234';
+
+let isAdmin = false;
+let sortState = {};
+
+let _mem = { hist: [], board: {}, roster: [] };
+
+const CC_KEY = '3B_StaffApp_v1';
+
+const CC_BASE_STAFF = [
+  {name:"Arnold, Carly E",job:"CA"},{name:"Banks, Breonica N",job:"CA"},
+  {name:"Bantin, Trinity H",job:"CA"},{name:"Barnhart, Adriana C",job:"CA"},
+  {name:"Batario, John Richard Craig",job:"CA"},{name:"Christiansen, Deanna M",job:"CA"},
+  {name:"Cook, Mark",job:"CA"},{name:"Delacruz, Alysson",job:"CA"},
+  {name:"Donohoe, Nicola",job:"CA"},{name:"Fitzgerald, Kimberly A",job:"CA"},
+  {name:"Gray, Catima",job:"CA"},{name:"Handsom, Jenifer",job:"CA"},
+  {name:"Hoff, Lorraine",job:"CA"},{name:"Holmes, Elizabeth N",job:"CA"},
+  {name:"Hunter, Tyree",job:"CA"},{name:"Kathan, Jenna L",job:"CA"},
+  {name:"King, Lakya",job:"CA"},{name:"King, Travonne J",job:"CA"},
+  {name:"Laney, Olivia",job:"CA"},
+  {name:"Mansour, Ryma N",job:"CA"},{name:"Morton, Madison A",job:"CA"},
+  {name:"Mosher, Cassie L",job:"CA"},{name:"Pierce, Wesley J",job:"CA"},
+  {name:"Porter, Alannah R",job:"CA"},{name:"Riedl, Sarah E",job:"CA"},
+  {name:"Satterlee, Morgan M",job:"CA"},{name:"Schilling, Saria M",job:"CA"},
+  {name:"Stoyle, Carmella",job:"CA"},{name:"VanAlstine, Alexa M",job:"CA"},
+  {name:"Fox, Laura S",job:"LPN"},{name:"Kelly, Lindsey N",job:"LPN"},
+  {name:"Shafer, Wayne A",job:"LPN"},{name:"Stebbins, Danielle L",job:"LPN"},
+  {name:"Alexander, Jessica L",job:"RN"},{name:"Barringer, Heather",job:"RN"},
+  {name:"Burkhart, Danielle M",job:"RN"},{name:"Cannon, Kelly",job:"RN"},
+  {name:"Caswell, Kaleigh",job:"RN"},{name:"Chaves Garcia, Tabata",job:"RN"},
+  {name:"Cole, Curtiss K",job:"RN"},{name:"Comiso, Deejay",job:"RN"},
+  {name:"Condame, Robin E",job:"RN"},{name:"Dean, Kelly L",job:"RN"},
+  {name:"Dibble, Martha",job:"RN"},{name:"Diederich, Sherry L",job:"RN"},
+  {name:"Fombe, Rose",job:"RN"},{name:"Goree, Kadian O",job:"RN"},
+  {name:"Hanyon, Sean",job:"RN"},{name:"Hatala, Carrie A",job:"RN"},
+  {name:"Hopkins, Sharon",job:"RN"},{name:"Hunsinger, Jennifer J",job:"RN"},
+  {name:"Irwin, Riley",job:"RN"},{name:"Johnson, Alyssa",job:"RN"},
+  {name:"Jones, Samantha F",job:"RN"},{name:"Kitching, Jill",job:"RN"},
+  {name:"Knight, Robin V",job:"RN"},{name:"Kratzberg, Jade A",job:"RN"},
+  {name:"Lee, Olajumoke M",job:"RN"},{name:"Muller, Laurel A",job:"RN"},
+  {name:"Murphy, Stephanie",job:"RN"},{name:"Quinlan, Meghan M",job:"RN"},
+  {name:"Robenson, Jean-Pierre",job:"RN"},{name:"Robinson, Miranda J",job:"RN"},
+  {name:"San Li, Jin",job:"RN"},{name:"Thomas, Jamie",job:"RN"},
+  {name:"Tye, Amber M",job:"RN"},{name:"Walker, Katie L",job:"RN"},
+  {name:"Wingler, Matthew",job:"RN"},
+];
+
+const EXCLUDED_NAMES = ['Ron Higley', 'Ronald Higley'];
+function getCCStaff() {
+  // Tier 1: Supabase live roster (pushed from Command Center)
+  if (_mem.roster?.length) {
+    return _mem.roster
+      .filter(s => s.status !== 'inactive' && !EXCLUDED_NAMES.includes(s.name))
+      .map(s => ({name: s.name, job: s.role || s.job || 'RN'}));
+  }
+  // Tier 2: Hardcoded fallback (until Supabase syncs)
+  return CC_BASE_STAFF.filter(s => !EXCLUDED_NAMES.includes(s.name));
+}
+
+function buildRoleRows(job, existingRows, fields) {
+  const ccStaff = getCCStaff().filter(s => s.job === job)
+    .sort((a,b) => a.name.localeCompare(b.name));
+
+  return ccStaff.map(s => {
+    const existing = existingRows.find(r =>
+      r.name === s.name ||
+      r.name.toLowerCase().replace(/\s/g,'') === s.name.toLowerCase().replace(/\s/g,'')
+    );
+    const row = { name: s.name, highlighted: existing?.highlighted || false };
+    fields.forEach(f => { row[f] = existing?.[f] || ''; });
+    return row;
+  });
+}
+
+const SEED_HISTORY = {
+  rn: [
+    {name:'Alexander, Jessica L', float:'4/29/2026', sitter:'3/5/2026',  calloff:'3/5/2026'},
+    {name:'Burkhart, Danielle M',  sitter:'9/9/2025',  calloff:'4/2/2026'},
+    {name:'Cannon, Kelly',         float:'4/28/2026', sitter:'4/13/2026'},
+    {name:'Caswell, Kaleigh',      float:'2/21/2026', sitter:'2/7/2026',  highlighted:true},
+    {name:'Chaves Garcia, Tabata', float:'4/23/2026', sitter:'5/1/2026',  calloff:'3/26/2026'},
+    {name:'Cole, Curtiss K',       float:'-',         sitter:'3/29/2025', calloff:'4/4/2026'},
+    {name:'Condame, Robin E',      sitter:'11/28/2025'},
+    {name:'Dean, Kelly L',         float:'4/15/2026', sitter:'10/30/2025',calloff:'4/15/2026'},
+    {name:'Dibble, Martha',        float:'4/15/2026', sitter:'3/25/2026', calloff:'3/31/2026'},
+    {name:'Fombe, Rose',           float:'4/15/2026', sitter:'4/26/2026', calloff:'-',       highlighted:true},
+    {name:'Goree, Kadian O',       float:'4/25/2026', sitter:'2/14/2026'},
+    {name:'Hanyon, Sean',          float:'4/25/2026', sitter:'4/10/2026', calloff:'-'},
+    {name:'Hatala, Carrie A',      sitter:'2/22/2026'},
+    {name:'Hunsinger, Jennifer J', float:'4/18/2026', sitter:'3/25/2026', calloff:'-'},
+    {name:'Robenson, Jean-Pierre', float:'4/15/2026', sitter:'4/12/2026'},
+    {name:'Johnson, Alyssa',       float:'4/16/2026', sitter:'3/8/2026'},
+    {name:'Kitching, Jill',        float:'4/19/2026', calloff:'4/11/2026'},
+    {name:'Knight, Robin V',       float:'-',         sitter:'4/26/2026', calloff:'-'},
+    {name:'Muller, Laurel A',      sitter:'3/11/2026'},
+    {name:'Murphy, Stephanie',     float:'4/30/2026', sitter:'4/17/2026', calloff:'-'},
+    {name:'Quinlan, Meghan M',     float:'4/12/2026', sitter:'2/18/2026', calloff:'2/15/2026'},
+    {name:'Robinson, Miranda J',   float:'-',         sitter:'3/23/2026'},
+    {name:'San Li, Jin',           float:'4/22/2026', sitter:'3/9/2026',  calloff:'4/3/2026', highlighted:true},
+    {name:'Thomas, Jamie',         float:'4/27/2026', sitter:'-'},
+    {name:'Tye, Amber M',          float:'4/12/2026', sitter:'2/16/2026', calloff:'2/15/2026'},
+    {name:'Walker, Katie L',       sitter:'5/3/2026', calloff:'-'},
+    {name:'Wingler, Matthew',      float:'4/14/2026', sitter:'4/4/2026',  calloff:'-'},
+  ],
+  lpn: [
+    {name:'Fox, Laura S',        float:'4/29/2026', sitter:'4/29/2026', lpnca:'4/23/2026'},
+    {name:'Kelly, Lindsey N',    float:'4/29/2026', sitter:'4/30/2026', lpnca:'4/30/2026'},
+    {name:'Shafer, Wayne A',     float:'4/17/2026', sitter:'4/19/2026', lpnca:'-',        calloff:'4/9/2026'},
+    {name:'Stebbins, Danielle L',float:'5/29/2026', sitter:'5/2/2026',  lpnca:'4/29/2026',calloff:'4/4/2026'},
+  ],
+  ca: [
+    {name:'Arnold, Carly E',        float:'7/29/2025'},
+    {name:'Bantin, Trinity H',       float:'2/10/2026', sitter:'2/28/2026', mandation:'12/31/2025'},
+    {name:'Barnhart, Adriana C',     float:'4/15/2026', sitter:'4/7/2026'},
+    {name:'Christiansen, Deanna M',  float:'4/6/2026',  sitter:'4/15/2026', mandation:'-', highlighted:true},
+    {name:'Cook, Mark',              float:'4/18/2026', sitter:'4/5/2026',  mandation:'3/9/2026'},
+    {name:'Delacruz, Alysson',       float:'1/29/2026', sitter:'2/2/2026',  highlighted:true},
+    {name:'Donohoe, Nicola',         float:'4/21/2026', sitter:'4/21/2026', mandation:'1/7/2026'},
+    {name:'Fitzgerald, Kimberly A',  float:'4/15/2026', sitter:'4/30/2026', highlighted:true},
+    {name:'Handsom, Jenifer',        sitter:'5/29/2026'},
+    {name:'Hoff, Lorraine',          float:'2/10/2026', sitter:'2/10/2026'},
+    {name:'Holmes, Elizabeth N',     float:'4/16/2026', sitter:'4/7/2026'},
+    {name:'Hunter, Tyree',           float:'4/18/2026', sitter:'4/16/2026'},
+    {name:'Kathan, Jenna L',         float:'-',         sitter:'1/6/2026'},
+    {name:'King, Lakya',             float:'-',         sitter:'-'},
+    {name:'King, Travonne J',        float:'4/8/2026',  sitter:'4/14/2026', highlighted:true},
+    {name:'Laney, Olivia',           float:'-',         sitter:'-'},
+    {name:'Mansour, Ryma N',         float:'10/9/2025', sitter:'4/7/2026'},
+    {name:'Michaels, Alex',          float:'4/18/2026', sitter:'4/22/2026'},
+    {name:'Morton, Madison A',       float:'-',         sitter:'-'},
+    {name:'Mosher, Cassie L',        float:'4/13/2026', sitter:'4/15/2026'},
+    {name:'Pierce, Wesley J',        float:'-',         sitter:'-'},
+    {name:'Porter, Alannah R',       float:'4/13/2026', sitter:'4/20/2026'},
+    {name:'Riedl, Sarah E',          float:'4/2/2026',  sitter:'4/16/2026'},
+    {name:'Stoyle, Carmella',        float:'-',         sitter:'4/7/2026',  highlighted:true},
+    {name:'Schilling, Saria M',      float:'4/19/2026', sitter:'4/19/2026'},
+    {name:'VanAlstine, Alexa M',     float:'9/26/2025', sitter:'3/31/2026', mandation:'4/26/2026', refusal:'-'},
+  ],
+};
+
+const defaultData = {
+  lastUpdated: '5/13/2026 12:11 PM',
+  rn:  buildRoleRows('RN',  SEED_HISTORY.rn,  ['float','sitter','calloff']),
+  lpn: buildRoleRows('LPN', SEED_HISTORY.lpn, ['float','sitter','lpnca','calloff']),
+  ca:  buildRoleRows('CA',  SEED_HISTORY.ca,  ['float','sitter','calloff','mandation','refusal']),
+  rnUpdates: [
+    {name:'Walker, Katie L',       type:'Sitter', time:'5/4/26 7:12'},
+    {name:'Chaves Garcia, Tabata', type:'Sitter', time:'5/1/26 19:15'},
+    {name:'Barringer, Heather',    type:'Float',  time:'4/30/26 6:57'},
+    {name:'Murphy, Stephanie',     type:'Float',  time:'4/30/26 6:51'},
+  ],
+  lpnUpdates: [
+    {name:'Stebbins, Danielle L', type:'Float',    time:'5/2/26 8:31'},
+    {name:'Stebbins, Danielle L', type:'Sitter',   time:'5/2/26 8:00'},
+    {name:'Kelly, Lindsey N',     type:'Sitter',   time:'4/30/26 16:51'},
+    {name:'Fox, Laura S',         type:'LPN as CA',time:'4/30/26 6:57'},
+    {name:'Kelly, Lindsey N',     type:'LPN as CA',time:'4/30/26 6:55'},
+  ],
+  caUpdates: [
+    {name:'Handsom, Jenifer',    type:'Sitter',    time:'5/2/26 8:32'},
+    {name:'Fitzgerald, Kimberly A',type:'Sitter',  time:'5/1/26 3:00'},
+    {name:'Handsom, Jenifer',    type:'Called off', time:'4/28/26 16:05'},
+    {name:'VanAlstine, Alexa M', type:'Mandated',  time:'4/26/26 13:30'},
+    {name:'Porter, Alannah R',   type:'Sitter',    time:'4/25/26 4:41'},
+  ],
+};
+
+let data = {};
+
+function loadData() {
+  if (!data || !data.rn) {
+    data = JSON.parse(JSON.stringify(defaultData));
+  }
+}
+function saveData() {
+  data.lastUpdated = formatNow();
+  document.getElementById('lastUpdatedLabel').textContent = 'Last Updated: ' + data.lastUpdated;
+  if (_fsbSbConn) {
+    clearTimeout(window._fsbPushDebounce);
+    window._fsbPushDebounce = setTimeout(fsbPush, 1000);
+  }
+}
+
+// ══════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════
+function renderAll() {
+  renderRNTable();
+  renderLPNTable();
+  renderCATable();
+  renderUpdates();
+  renderStats();
+  document.getElementById('lastUpdatedLabel').textContent = 'Last Updated: ' + data.lastUpdated;
+}
+
+function renderRNTable() {
+  const tbody = document.getElementById('rnBody');
+  tbody.innerHTML = data.rn.map((r, i) => `
+    <tr class="${r.highlighted ? 'highlighted' : ''}">
+      <td>${r.name}</td>
+      <td class="date-cell editable-cell" onclick="editCell('rn',${i},'float',this)">${displayDate(r.float)}</td>
+      <td class="date-cell editable-cell" onclick="editCell('rn',${i},'sitter',this)">${displayDate(r.sitter)}</td>
+      <td class="date-cell editable-cell" onclick="editCell('rn',${i},'calloff',this)">${displayDate(r.calloff)}</td>
+    </tr>`).join('');
+}
+
+function renderLPNTable() {
+  const tbody = document.getElementById('lpnBody');
+  tbody.innerHTML = data.lpn.map((r, i) => `
+    <tr class="${r.highlighted ? 'highlighted' : ''}">
+      <td>${r.name}</td>
+      <td class="date-cell editable-cell" onclick="editCell('lpn',${i},'float',this)">${displayDate(r.float)}</td>
+      <td class="date-cell editable-cell" onclick="editCell('lpn',${i},'sitter',this)">${displayDate(r.sitter)}</td>
+      <td class="date-cell editable-cell" onclick="editCell('lpn',${i},'lpnca',this)">${displayDate(r.lpnca)}</td>
+      <td class="date-cell editable-cell" onclick="editCell('lpn',${i},'calloff',this)">${displayDate(r.calloff)}</td>
+    </tr>`).join('');
+}
+
+function renderCATable() {
+  const tbody = document.getElementById('caBody');
+  tbody.innerHTML = data.ca.map((r, i) => `
+    <tr class="${r.highlighted ? 'highlighted' : ''}">
+      <td>${r.name}</td>
+      <td class="date-cell editable-cell" onclick="editCell('ca',${i},'float',this)">${displayDate(r.float)}</td>
+      <td class="date-cell editable-cell" onclick="editCell('ca',${i},'sitter',this)">${displayDate(r.sitter)}</td>
+      <td class="date-cell editable-cell" onclick="editCell('ca',${i},'calloff',this)">${displayDate(r.calloff)}</td>
+      <td class="date-cell editable-cell" onclick="editCell('ca',${i},'mandation',this)">${displayDate(r.mandation)}</td>
+      <td class="date-cell editable-cell" onclick="editCell('ca',${i},'refusal',this)">${displayDate(r.refusal)}</td>
+    </tr>`).join('');
+}
+
+function renderUpdates() {
+  renderUpdatePanel('rnUpdates', data.rnUpdates);
+  renderUpdatePanel('lpnUpdates', data.lpnUpdates);
+  renderUpdatePanel('caUpdates', data.caUpdates);
+}
+
+function renderUpdatePanel(elId, updates) {
+  document.getElementById(elId).innerHTML = updates.map((u,i) => `
+    <div class="update-row">
+      <span class="update-name">${u.name.split(',')[0]}, ${u.name.split(',')[1]?.trim().charAt(0)||''}</span>
+      <span class="update-type">${u.type}</span>
+      <span class="update-time">${u.time}</span>
+    </div>`).join('');
+}
+
+function renderStats() {
+  const allFloats = [...data.rn,...data.lpn,...data.ca].filter(r=>r.float&&r.float!=='-'&&r.float!=='').length;
+  const allCalloffs = [...data.rn,...data.lpn,...data.ca].filter(r=>r.calloff&&r.calloff!=='-'&&r.calloff!=='').length;
+  document.getElementById('statsBlock').innerHTML = `
+    <div style="font-size:14px;font-weight:700;color:var(--teal-header);margin-bottom:8px;">📊 Board Summary</div>
+    <div style="margin-bottom:4px;">Total RN: <strong>${data.rn.length}</strong></div>
+    <div style="margin-bottom:4px;">Total LPN: <strong>${data.lpn.length}</strong></div>
+    <div style="margin-bottom:4px;">Total CA: <strong>${data.ca.length}</strong></div>
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--text-light);">
+      Staff with float history: ${allFloats}<br>
+      Staff with call-off history: ${allCalloffs}
+    </div>`;
+}
+
+// ══════════════════════════════════════════
+//  INLINE EDIT (admin only)
+// ══════════════════════════════════════════
+function editCell(group, idx, field, td) {
+  if (!isAdmin) return;
+  if (td.querySelector('input')) return;
+
+  const current = data[group][idx][field] || '';
+  const displayVal = current === '-' ? '' : current;
+
+  let inputVal = '';
+  if (displayVal) {
+    const parts = displayVal.split('/');
+    if (parts.length === 3) {
+      inputVal = `${parts[2]}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;
+    }
+  }
+
+  const originalText = td.innerHTML;
+  td.innerHTML = `<input class="inline-editor" type="date" value="${inputVal}" id="inlineEdit_${group}_${idx}_${field}">`;
+  const input = td.querySelector('input');
+  input.focus();
+
+  input.addEventListener('change', () => {
+    const val = input.value;
+    if (val) {
+      const [y,m,d] = val.split('-');
+      data[group][idx][field] = `${+m}/${+d}/${y}`;
+    } else {
+      data[group][idx][field] = '';
+    }
+    saveData();
+    addUpdateEntry(group, data[group][idx].name, field, data[group][idx][field]);
+    renderAll();
+  });
+
+  input.addEventListener('blur', () => {
+    setTimeout(() => {
+      if (document.activeElement !== input) {
+        td.innerHTML = originalText;
+      }
+    }, 200);
+  });
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Escape') td.innerHTML = originalText;
+  });
+}
+
+function addUpdateEntry(group, name, field, date) {
+  const typeMap = {float:'Float',sitter:'Sitter',calloff:'Call Off',mandation:'Mandation',refusal:'Refusal',lpnca:'LPN as CA'};
+  const entry = { name, type: typeMap[field]||field, time: formatNowShort() };
+  const updateKey = group+'Updates';
+  if (!data[updateKey]) data[updateKey] = [];
+  data[updateKey].unshift(entry);
+  if (data[updateKey].length > 8) data[updateKey] = data[updateKey].slice(0,8);
+}
+
+// ══════════════════════════════════════════
+//  ADD ENTRY PANEL
+// ══════════════════════════════════════════
+function toggleAddPanel() {
+  const p = document.getElementById('addPanel');
+  p.classList.toggle('show');
+  if (p.classList.contains('show')) {
+    document.getElementById('addDate').value = todayISO();
+    populateNameDropdown();
+  }
+}
+
+function populateNameDropdown() {
+  const role = document.getElementById('addRole').value.toLowerCase();
+  const names = data[role].map(r => r.name).sort();
+  document.getElementById('addName').innerHTML = names.map(n => `<option>${n}</option>`).join('');
+}
+
+function submitNewEntry() {
+  const role  = document.getElementById('addRole').value.toLowerCase();
+  const name  = document.getElementById('addName').value;
+  const type  = document.getElementById('addType').value;
+  const date  = document.getElementById('addDate').value;
+
+  if (!name || !date) { showToast('⚠ Select name and date'); return; }
+
+  const [y,m,d] = date.split('-');
+  const fmtDate = `${+m}/${+d}/${y}`;
+
+  const idx = data[role].findIndex(r => r.name === name);
+  if (idx === -1) { showToast('Staff not found'); return; }
+
+  const fieldMap = {Float:'float',Sitter:'sitter','Call Off':'calloff','Mandation':'mandation','Refusal':'refusal','LPN as CA':'lpnca'};
+  const field = fieldMap[type];
+  if (field) {
+    data[role][idx][field] = fmtDate;
+    addUpdateEntry(role, name, field, fmtDate);
+    saveData();
+    renderAll();
+    showToast(`✓ Updated ${name.split(',')[0]} — ${type}`);
+    toggleAddPanel();
+  }
+}
+
+// ══════════════════════════════════════════
+//  SORT
+// ══════════════════════════════════════════
+function sortTable(group, field) {
+  const key = group + '_' + field;
+  sortState[key] = sortState[key] === 'asc' ? 'desc' : 'asc';
+  const asc = sortState[key] === 'asc';
+
+  data[group].sort((a, b) => {
+    let va = a[field]||'', vb = b[field]||'';
+    if (!va||va==='-') va = asc ? 'zzz' : '000';
+    if (!vb||vb==='-') vb = asc ? 'zzz' : '000';
+    const da = parseDate(va), db = parseDate(vb);
+    if (da && db) return asc ? da-db : db-da;
+    return asc ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+
+  document.querySelectorAll('.sort-arrow').forEach(el => {
+    el.classList.remove('asc','desc');
+  });
+
+  renderAll();
+}
+
+function parseDate(str) {
+  if (!str || str === '-') return null;
+  const parts = str.split('/');
+  if (parts.length === 3) {
+    return new Date(+parts[2], +parts[0]-1, +parts[1]);
+  }
+  return null;
+}
+
+// ══════════════════════════════════════════
+//  ADMIN AUTH
+// ══════════════════════════════════════════
+function setMode(mode) {
+  if (mode === 'admin') {
+    if (!isAdmin) { openAuth(); return; }
+  } else {
+    exitAdmin();
+  }
+}
+
+function openAuth() {
+  document.getElementById('authOverlay').classList.add('open');
+  document.getElementById('pinInput').value = '';
+  document.getElementById('authError').textContent = '';
+  setTimeout(() => document.getElementById('pinInput').focus(), 100);
+}
+
+function closeAuth() {
+  document.getElementById('authOverlay').classList.remove('open');
+}
+
+function tryLogin() {
+  const pin = document.getElementById('pinInput').value;
+  if (pin === ADMIN_PIN) {
+    isAdmin = true;
+    closeAuth();
+    document.body.classList.add('admin-mode');
+    document.getElementById('adminBanner').classList.add('show');
+    document.getElementById('btnAdmin').classList.add('active');
+    document.getElementById('btnStaff').classList.remove('active');
+    showToast('✓ Admin mode active');
+    populateNameDropdown();
+  } else {
+    document.getElementById('authError').textContent = 'Incorrect PIN. Try again.';
+    document.getElementById('pinInput').value = '';
+    document.getElementById('pinInput').focus();
+  }
+}
+
+function exitAdmin() {
+  isAdmin = false;
+  document.body.classList.remove('admin-mode');
+  document.getElementById('adminBanner').classList.remove('show');
+  document.getElementById('addPanel').classList.remove('show');
+  document.getElementById('btnStaff').classList.add('active');
+  document.getElementById('btnAdmin').classList.remove('active');
+  showToast('Returned to Staff View');
+}
+
+// ══════════════════════════════════════════
+//  UTILS
+// ══════════════════════════════════════════
+function displayDate(val) {
+  if (!val || val === '') return '<span class="dash-cell">-</span>';
+  if (val === '-') return '<span class="dash-cell">-</span>';
+  return val;
+}
+
+function todayISO() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function formatNow() {
+  const n = new Date();
+  return `${n.getMonth()+1}/${n.getDate()}/${n.getFullYear()} ${n.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}`;
+}
+
+function formatNowShort() {
+  const n = new Date();
+  return `${n.getMonth()+1}/${n.getDate()}/${String(n.getFullYear()).slice(2)} ${n.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}`;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function fsbToast(msg) { showToast(msg); }
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clockDisplay').textContent =
+    now.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + ' · ' +
+    now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+}
+
+function updateLastUpdated() {
+  try {
+    const hist = _mem.hist || [];
+    if (hist.length > 0) {
+      const latest = hist[0];
+      const ts = latest.timestamp ? new Date(latest.timestamp) : new Date(latest.date);
+      if (!isNaN(ts)) {
+        document.getElementById('lastUpdatedLabel').textContent =
+          'Last Updated: ' + ts.toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'numeric'}) +
+          ' ' + ts.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+        return;
+      }
+    }
+  } catch(_) {}
+  document.getElementById('lastUpdatedLabel').textContent =
+    data.lastUpdated ? 'Last Updated: ' + data.lastUpdated : 'Last Updated: —';
+}
+
+function pollForUpdates() {
+  if (_fsbSbConn) fsbPoll();
+  updateLastUpdated();
+}
+
+function syncFromHistory() {
+  try {
+    const hist = _mem.hist || [];
+    if (!hist.length) return;
+
+    const fieldMap = {Float:'float',Sitter:'sitter','Call Off':'calloff','Mandation':'mandation','Refused Mandation':'refusal','LPN in CS':'lpnca','LPN as CA':'lpnca'};
+    const typeMap  = {float:'Float',sitter:'Sitter',calloff:'Call Off',mandation:'Mandation',refusal:'Refusal',lpnca:'LPN as CA'};
+
+    const groups = {rn:{},lpn:{},ca:{}};
+    hist.forEach(e => {
+      const rk = (e.role||'').toLowerCase();
+      if (!groups[rk]) return;
+      const field = fieldMap[e.assign];
+      if (!field || !e.date) return;
+      if (!groups[rk][e.staff]) groups[rk][e.staff] = {};
+      const existing = groups[rk][e.staff][field];
+      if (!existing || e.date > existing) groups[rk][e.staff][field] = e.date;
+    });
+
+    data.rn  = buildRoleRows('RN',  data.rn  || [], ['float','sitter','calloff']);
+    data.lpn = buildRoleRows('LPN', data.lpn || [], ['float','sitter','lpnca','calloff']);
+    data.ca  = buildRoleRows('CA',  data.ca  || [], ['float','sitter','calloff','mandation','refusal']);
+
+    ['rn','lpn','ca'].forEach(rk => {
+      if (!data[rk]) return;
+      data[rk].forEach(person => {
+        const updates = groups[rk][person.name] || {};
+        Object.entries(updates).forEach(([field, dateISO]) => {
+          const [y,m,d] = dateISO.split('-');
+          if (y && m && d) person[field] = `${+m}/${+d}/${y}`;
+        });
+      });
+    });
+
+    ['rn','lpn','ca'].forEach(rk => {
+      const roleEntries = hist.filter(e => (e.role||'').toLowerCase() === rk).slice(0, 6);
+      data[rk+'Updates'] = roleEntries.map(e => {
+        const ts = e.timestamp ? new Date(e.timestamp) : new Date();
+        const timeStr = `${ts.getMonth()+1}/${ts.getDate()}/${String(ts.getFullYear()).slice(2)} ${ts.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}`;
+        return {
+          name: e.staff,
+          type: typeMap[fieldMap[e.assign]] || e.assign,
+          time: timeStr,
+        };
+      });
+    });
+
+    data.lastUpdated = formatNow();
+    saveData();
+    renderAll();
+    updateLastUpdated();
+  } catch(err) { console.warn('syncFromHistory error:', err); }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  loadData();
+  syncFromHistory();
+  renderAll();
+  updateLastUpdated();
+  updateClock();
+  setInterval(updateClock, 15000);
+  setInterval(pollForUpdates, 15000);
+  setInterval(syncFromHistory, 30000);
+  setTimeout(fsbConnect, 1500);
+
+  document.getElementById('pinInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') tryLogin();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════
+//  SUPABASE SYNC
+// ════════════════════════════════════════════════════════════════
+const SB_URL      = 'https://xnsdvdfceflmagfhpycw.supabase.co';
+const SB_KEY      = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhuc2R2ZGZjZWZsbWFnZmhweWN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MTk1NjgsImV4cCI6MjA5NDk5NTU2OH0.UzKZQj4BLxPpH_OCwQR8LyDUeP9YlKn5UtXRFUFaYKA';
+const SB_HEADERS  = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' };
+
+let _fsbSbConn    = false;
+let _fsbSbSaving  = false;
+let _fsbPollTimer = null;
+let _fsbUserId    = 'board';
+
+async function sbGet(key) {
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/tracker_state?key=eq.${key}&select=value`, { headers: SB_HEADERS });
+    if (!r.ok) return null;
+    const rows = await r.json();
+    return rows?.[0]?.value ? JSON.parse(rows[0].value) : null;
+  } catch(e) { return null; }
+}
+
+async function sbSet(key, value) {
+  return fetch(`${SB_URL}/rest/v1/tracker_state`, {
+    method: 'POST',
+    headers: { ...SB_HEADERS, Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({ key, value: JSON.stringify(value), updated_at: new Date().toISOString(), updated_by: _fsbUserId })
+  });
+}
+
+function fsbUpdateBadge(state) {
+  const el = document.getElementById('sb-badge');
+  if (!el) return;
+  const time = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  if (!_fsbSbConn) {
+    el.innerHTML = `<div onclick="showSyncSetup()" style="display:flex;align-items:center;gap:5px;cursor:pointer;"><span class="sync-dot" style="background:#ef4444;box-shadow:0 0 6px #ef4444;"></span><span style="font-size:10px;color:#fca5a5;">☁️ Offline</span></div>`;
+  } else if (state === 'saved') {
+    el.innerHTML = `<div onclick="showSyncSetup()" style="display:flex;align-items:center;gap:5px;cursor:pointer;"><span class="sync-dot" style="background:#22c55e;box-shadow:0 0 6px #22c55e;"></span><span style="font-size:10px;color:#86efac;">☁️ Saved · ${time}</span></div>`;
+  } else if (state === 'pulled') {
+    el.innerHTML = `<div onclick="showSyncSetup()" style="display:flex;align-items:center;gap:5px;cursor:pointer;"><span class="sync-dot" style="background:#3b82f6;box-shadow:0 0 6px #3b82f6;animation:pulse 1s 2;"></span><span style="font-size:10px;color:#93c5fd;">☁️ Synced · ${time}</span></div>`;
+  } else {
+    el.innerHTML = `<div onclick="showSyncSetup()" style="display:flex;align-items:center;gap:5px;cursor:pointer;"><span class="sync-dot" style="background:#3b82f6;box-shadow:0 0 6px #3b82f6;"></span><span style="font-size:10px;color:#93c5fd;">☁️ Connected</span></div>`;
+  }
+}
+
+async function fsbPush() {
+  if (_fsbSbSaving || !_fsbSbConn) return;
+  _fsbSbSaving = true;
+  try {
+    await Promise.all([
+      sbSet('float_history', _mem.hist),
+      sbSet('float_board',   data),
+      sbSet('float_roster',  _mem.roster),
+    ]);
+    fsbUpdateBadge('saved');
+  } catch(e) { console.warn('fsbPush:', e); }
+  finally { _fsbSbSaving = false; }
+}
+
+async function fsbPoll() {
+  try {
+    const r = await fetch(
+      `${SB_URL}/rest/v1/tracker_state?key=in.(float_history,float_board,float_roster)&select=key,value,updated_at,updated_by`,
+      { headers: SB_HEADERS }
+    );
+    if (!r.ok) { _fsbSbConn=false; fsbUpdateBadge('offline'); return; }
+    _fsbSbConn = true;
+    const rows = await r.json();
+    if (!rows?.length) return;
+
+    const lastPull = window._lastPull || 0;
+    let anyNewer = false;
+
+    rows.forEach(row => {
+      const remoteTs = new Date(row.updated_at).getTime();
+      if (remoteTs > lastPull + 1000 && row.updated_by !== _fsbUserId && row.value) {
+        try {
+          const val = JSON.parse(row.value);
+          if (row.key === 'float_history') _mem.hist = val;
+          if (row.key === 'float_board')   Object.assign(data, val);
+          if (row.key === 'float_roster')  _mem.roster = val;
+          anyNewer = true;
+        } catch(e) {}
+      }
+    });
+
+    if (anyNewer) {
+      window._lastPull = Date.now();
+      loadData();
+      syncFromHistory();
+      renderAll();
+      updateLastUpdated();
+      fsbUpdateBadge('pulled');
+      fsbToast('Board updated from cloud');
+    }
+  } catch(e) { _fsbSbConn=false; fsbUpdateBadge('offline'); }
+}
+
+async function fsbConnect() {
+  _fsbUserId = 'board';
+  try {
+    const r = await fetch(
+      `${SB_URL}/rest/v1/tracker_state?key=in.(float_history,float_board,float_roster)&select=key,value,updated_at&limit=3`,
+      { headers: SB_HEADERS }
+    );
+    _fsbSbConn = r.ok;
+    if (r.ok) {
+      fsbUpdateBadge('connected');
+      await fsbPull();
+      if (_fsbPollTimer) clearInterval(_fsbPollTimer);
+      _fsbPollTimer = setInterval(fsbPoll, 10000);
+    } else {
+      fsbUpdateBadge('offline');
+    }
+  } catch(e) { _fsbSbConn=false; fsbUpdateBadge('offline'); }
+}
+
+async function fsbPull() {
+  try {
+    const r = await fetch(
+      `${SB_URL}/rest/v1/tracker_state?key=in.(float_history,float_board,float_roster)&select=key,value`,
+      { headers: SB_HEADERS }
+    );
+    if (!r.ok) return;
+    const rows = await r.json();
+
+    let gotBoard = false;
+    rows.forEach(row => {
+      if (!row.value) return;
+      try {
+        const val = JSON.parse(row.value);
+        if (row.key === 'float_history') _mem.hist = val;
+        if (row.key === 'float_roster')  _mem.roster = val;
+        if (row.key === 'float_board') {
+          data = JSON.parse(JSON.stringify(defaultData));
+          ['rn','lpn','ca'].forEach(rk => {
+            if (!val[rk]?.length) return;
+            data[rk].forEach(person => {
+              const match = val[rk].find(r => r.name === person.name || r.name?.toLowerCase() === person.name?.toLowerCase());
+              if (match) Object.assign(person, match);
+            });
+            val[rk].forEach(cloudPerson => {
+              if (!data[rk].find(p => p.name?.toLowerCase() === cloudPerson.name?.toLowerCase())) {
+                data[rk].push(cloudPerson);
+              }
+            });
+          });
+          ['rnUpdates','lpnUpdates','caUpdates'].forEach(k => { if (val[k]) data[k] = val[k]; });
+          if (val.lastUpdated) data.lastUpdated = val.lastUpdated;
+          gotBoard = true;
+        }
+      } catch(e) { console.warn('fsbPull parse error:', e); }
+    });
+
+    syncFromHistory();
+    renderAll();
+    updateLastUpdated();
+    fsbUpdateBadge('pulled');
+
+    if (!gotBoard) {
+      data = JSON.parse(JSON.stringify(defaultData));
+      renderAll();
+      await sbSet('float_board', data);
+    }
+  } catch(e) { console.warn('fsbPull error:', e); }
+}
+
+function showSyncSetup() {
+  fsbToast(_fsbSbConn ? '☁️ Connected to Supabase' : '⚠ Supabase offline — check connection');
+}
+</script>
+</body>
+</html>
