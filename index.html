@@ -595,6 +595,23 @@ body {
       <input type="date" id="sumEnd" style="padding:6px 8px;border:1px solid var(--border);border-radius:5px;font-size:12px;">
     </div>
     <div>
+      <label style="display:block;font-size:10px;color:var(--text-light);margin-bottom:3px;">Role</label>
+      <select id="sumRole" onchange="populateSummaryStaffDropdown();runSummary()" style="padding:6px 8px;border:1px solid var(--border);border-radius:5px;font-size:12px;">
+        <option value="">— All Roles —</option>
+        <option value="RN">RN</option>
+        <option value="LPN">LPN</option>
+        <option value="CA">CA</option>
+      </select>
+    </div>
+    <div>
+      <label style="display:block;font-size:10px;color:var(--text-light);margin-bottom:3px;">Type</label>
+      <select id="sumType" onchange="runSummary()" style="padding:6px 8px;border:1px solid var(--border);border-radius:5px;font-size:12px;">
+        <option value="">— Float &amp; Sitter —</option>
+        <option value="Float">Float only</option>
+        <option value="Sitter">Sitter only</option>
+      </select>
+    </div>
+    <div>
       <label style="display:block;font-size:10px;color:var(--text-light);margin-bottom:3px;">Staff (optional)</label>
       <select id="sumStaff" onchange="runSummary()" style="padding:6px 8px;border:1px solid var(--border);border-radius:5px;font-size:12px;max-width:220px;">
         <option value="">— All Staff —</option>
@@ -1491,10 +1508,15 @@ function isoDate(d) { return d.toISOString().slice(0,10); }
 function populateSummaryStaffDropdown() {
   const sel = document.getElementById('sumStaff');
   const prevVal = sel.value;
-  const allStaff = getCCStaff().slice().sort((a,b) => a.name.localeCompare(b.name));
+  const roleFilter = document.getElementById('sumRole')?.value || '';
+  const allStaff = getCCStaff()
+    .filter(s => !roleFilter || String(s.job || '').toUpperCase() === roleFilter)
+    .slice()
+    .sort((a,b) => a.name.localeCompare(b.name));
   sel.innerHTML = '<option value="">— All Staff —</option>' +
     allStaff.map(s => `<option value="${s.name}">${s.name} (${s.job})</option>`).join('');
   if (prevVal && allStaff.some(s => s.name === prevVal)) sel.value = prevVal;
+  else sel.value = '';
 }
 
 function setSummaryRange(preset) {
@@ -1528,9 +1550,96 @@ async function fetchFloatHistory() {
   try { return JSON.parse(rows[0].value); } catch(e) { return []; }
 }
 
+function normalizeSummaryRole(role, staffName) {
+  const raw = String(role || '').toUpperCase();
+  if (['RN','LPN','CA'].includes(raw)) return raw;
+  const match = getCCStaff().find(s => s.name === staffName);
+  return String(match?.job || '').toUpperCase();
+}
+
+function pushSummaryEvent(list, source, assign, unit) {
+  const type = String(assign || '').trim();
+  if (!source?.date || !source?.staff) return;
+  list.push({
+    staff: source.staff,
+    role: normalizeSummaryRole(source.role, source.staff),
+    type,
+    unit: unit || source.unit || '(unspecified)',
+    date: source.date,
+    shift: source.shift || ''
+  });
+}
+
+function flattenSummaryEvents(entries, allowedTypes) {
+  const allowed = new Set(allowedTypes);
+  const events = [];
+  for (const e of entries) {
+    if (allowed.has(e.assign)) pushSummaryEvent(events, e, e.assign, e.unit);
+    if (Array.isArray(e.extraAssignments)) {
+      for (const ex of e.extraAssignments) {
+        if (allowed.has(ex.assign)) pushSummaryEvent(events, e, ex.assign, ex.unit || e.unit);
+      }
+    }
+  }
+  return events;
+}
+
+function caMandationWindow(referenceISO) {
+  const ref = referenceISO || isoDate(new Date());
+  const year = parseInt(ref.slice(0,4), 10) || new Date().getFullYear();
+  const month = parseInt(ref.slice(5,7), 10) || 1;
+  if (month <= 6) {
+    return { start:`${year}-01-01`, end:`${year}-06-30`, label:`Jan 1 - Jun 30, ${year}` };
+  }
+  return { start:`${year}-07-01`, end:`${year}-12-31`, label:`Jul 1 - Dec 31, ${year}` };
+}
+
+function isMandationAssign(assign) {
+  const a = String(assign || '').toLowerCase();
+  return a.startsWith('mandat') && !a.includes('refus');
+}
+
+function buildCAMandationRows(entries, referenceISO) {
+  const win = caMandationWindow(referenceISO);
+  const caStaff = getCCStaff()
+    .filter(s => String(s.job || '').toUpperCase() === 'CA')
+    .map(s => s.name)
+    .sort((a,b) => a.localeCompare(b));
+  const byName = {};
+  caStaff.forEach(name => { byName[name] = { name, count:0, dates:[] }; });
+
+  function addMandation(source, assign) {
+    if (!source?.date || source.date < win.start || source.date > win.end) return;
+    if (!isMandationAssign(assign)) return;
+    const role = normalizeSummaryRole(source.role, source.staff);
+    if (role !== 'CA') return;
+    if (!byName[source.staff]) byName[source.staff] = { name:source.staff, count:0, dates:[] };
+    byName[source.staff].count++;
+    byName[source.staff].dates.push(source.date);
+  }
+
+  for (const e of entries) {
+    addMandation(e, e.assign);
+    if (Array.isArray(e.extraAssignments)) {
+      for (const ex of e.extraAssignments) addMandation(e, ex.assign);
+    }
+  }
+
+  const rows = Object.values(byName).map(r => {
+    r.dates.sort();
+    r.lastDate = r.dates[r.dates.length - 1] || '';
+    r.remaining = Math.max(0, 2 - r.count);
+    r.status = r.count > 2 ? 'Over limit' : r.count === 2 ? 'At limit' : 'Available';
+    return r;
+  }).sort((a,b) => (b.count - a.count) || b.lastDate.localeCompare(a.lastDate) || a.name.localeCompare(b.name));
+  return { window: win, rows };
+}
+
 async function runSummary() {
   const startISO = document.getElementById('sumStart').value;
   const endISO = document.getElementById('sumEnd').value;
+  const selectedRole = document.getElementById('sumRole')?.value || '';
+  const selectedType = document.getElementById('sumType')?.value || '';
   const statusEl = document.getElementById('summarySyncStatus');
   const resultsEl = document.getElementById('summaryResults');
   if (!startISO || !endISO) { showToast('⚠ Pick a start and end date'); return; }
@@ -1549,28 +1658,18 @@ async function runSummary() {
     return;
   }
 
-  // Flatten primary + extra assignments into individual float/sitter events
-  const events = [];
-  for (const e of entries) {
-    if (!e.date || e.date < startISO || e.date > endISO) continue;
-    if (e.assign === 'Float' || e.assign === 'Sitter') {
-      events.push({ staff: e.staff, role: e.role, type: e.assign, unit: e.unit || '(unspecified)', date: e.date, shift: e.shift || '' });
-    }
-    if (Array.isArray(e.extraAssignments)) {
-      for (const ex of e.extraAssignments) {
-        if (ex.assign === 'Float' || ex.assign === 'Sitter') {
-          events.push({ staff: e.staff, role: e.role, type: ex.assign, unit: ex.unit || '(unspecified)', date: e.date, shift: e.shift || '' });
-        }
-      }
-    }
-  }
+  let events = flattenSummaryEvents(entries, ['Float','Sitter'])
+    .filter(e => e.date >= startISO && e.date <= endISO);
+  if (selectedRole) events = events.filter(e => e.role === selectedRole);
+  if (selectedType) events = events.filter(e => e.type === selectedType);
+  const caMandation = buildCAMandationRows(entries, endISO);
 
   const selectedStaffName = document.getElementById('sumStaff').value;
   if (selectedStaffName) {
     const staffEvents = events
       .filter(e => e.staff === selectedStaffName)
       .sort((a,b) => a.date.localeCompare(b.date));
-    renderIndividualResults(selectedStaffName, staffEvents);
+    renderIndividualResults(selectedStaffName, staffEvents, caMandation);
     return;
   }
 
@@ -1596,7 +1695,7 @@ async function runSummary() {
     rankedDest[role] = Object.entries(destByRole[role]).map(([unit,count]) => ({unit,count})).sort((a,b)=>b.count-a.count);
   }
 
-  renderSummaryResults({ totalFloats, totalSitters, staffRows, rankedDest });
+  renderSummaryResults({ totalFloats, totalSitters, staffRows, rankedDest, selectedRole, selectedType, caMandation });
 }
 
 function fmtDisplayDate(iso) {
@@ -1604,10 +1703,17 @@ function fmtDisplayDate(iso) {
   return `${+m}/${+d}/${y}`;
 }
 
-function renderIndividualResults(staffName, staffEvents) {
+function renderIndividualResults(staffName, staffEvents, caMandation) {
   const resultsEl = document.getElementById('summaryResults');
   const floats = staffEvents.filter(e => e.type === 'Float').length;
   const sitters = staffEvents.filter(e => e.type === 'Sitter').length;
+  const staffRole = normalizeSummaryRole(staffEvents[0]?.role, staffName) || normalizeSummaryRole('', staffName);
+  const caMandationRow = staffRole === 'CA' ? caMandation.rows.find(r => r.name === staffName) : null;
+  const caMandationHtml = caMandationRow ? renderCAMandationPanel({
+    window: caMandation.window,
+    rows: [caMandationRow],
+    compact: true
+  }) : '';
 
   const rows = staffEvents.length ? `
     <table class="data-table" style="width:100%;margin-bottom:20px;">
@@ -1638,10 +1744,11 @@ function renderIndividualResults(staffName, staffEvents) {
     </div>
     <div style="font-size:12px;font-weight:700;color:var(--teal-header);margin-bottom:6px;">All Float &amp; Sitter Days</div>
     ${rows}
+    ${caMandationHtml}
   `;
 }
 
-function renderSummaryResults({ totalFloats, totalSitters, staffRows, rankedDest }) {
+function renderSummaryResults({ totalFloats, totalSitters, staffRows, rankedDest, selectedRole, selectedType, caMandation }) {
   const resultsEl = document.getElementById('summaryResults');
 
   const staffTable = staffRows.length ? `
@@ -1661,6 +1768,14 @@ function renderSummaryResults({ totalFloats, totalSitters, staffRows, rankedDest
     </table>`;
   }
 
+  const rolesToShow = selectedRole ? [selectedRole] : ['RN','LPN','CA'];
+  const destinationHtml = selectedType === 'Sitter'
+    ? ''
+    : rolesToShow.map(role => `
+      <div style="font-size:12px;font-weight:700;color:var(--teal-header);margin-bottom:6px;">Top Float Destinations — ${role}</div>
+      ${destTable(role)}
+    `).join('');
+
   resultsEl.innerHTML = `
     <div style="display:flex;gap:14px;margin-bottom:20px;flex-wrap:wrap;">
       <div style="background:var(--teal-row);border-radius:8px;padding:14px 22px;">
@@ -1676,15 +1791,36 @@ function renderSummaryResults({ totalFloats, totalSitters, staffRows, rankedDest
     <div style="font-size:12px;font-weight:700;color:var(--teal-header);margin-bottom:6px;">Floats &amp; Sitters by Staff Member</div>
     ${staffTable}
 
-    <div style="font-size:12px;font-weight:700;color:var(--teal-header);margin-bottom:6px;">Top Float Destinations — RN</div>
-    ${destTable('RN')}
-
-    <div style="font-size:12px;font-weight:700;color:var(--teal-header);margin-bottom:6px;">Top Float Destinations — LPN</div>
-    ${destTable('LPN')}
-
-    <div style="font-size:12px;font-weight:700;color:var(--teal-header);margin-bottom:6px;">Top Float Destinations — CA</div>
-    ${destTable('CA')}
+    ${destinationHtml}
+    ${renderCAMandationPanel(caMandation)}
   `;
+}
+
+function renderCAMandationPanel(caMandation) {
+  if (!caMandation) return '';
+  const rows = caMandation.rows || [];
+  const visibleRows = caMandation.compact ? rows : rows;
+  const tableRows = visibleRows.map(r => {
+    const color = r.count > 2 ? '#b91c1c' : r.count === 2 ? '#92400e' : 'var(--teal-header)';
+    const bg = r.count > 2 ? '#fee2e2' : r.count === 2 ? '#fef3c7' : '#e6f4f4';
+    return `<tr>
+      <td>${r.name}</td>
+      <td style="font-weight:800;color:${color};">${r.count}</td>
+      <td>${r.remaining}</td>
+      <td>${r.lastDate ? fmtDisplayDate(r.lastDate) : '—'}</td>
+      <td><span style="display:inline-block;background:${bg};color:${color};border-radius:12px;padding:2px 8px;font-weight:700;font-size:10px;">${r.status}</span></td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div style="margin-top:4px;margin-bottom:20px;">
+      <div style="font-size:12px;font-weight:700;color:var(--teal-header);margin-bottom:4px;">CA Mandation Tracking — ${caMandation.window.label}</div>
+      <div style="font-size:11px;color:var(--text-light);margin-bottom:6px;">CA mandating limit: 2 times per 6-month period. First period runs Jan 1 through Jun 30; second period runs Jul 1 through Dec 31.</div>
+      <table class="data-table" style="width:100%;margin-bottom:6px;">
+        <thead><tr><th>CA Staff</th><th>Mandations</th><th>Remaining</th><th>Last Mandation</th><th>Status</th></tr></thead>
+        <tbody>${tableRows || '<tr><td colspan="5" style="color:var(--text-light);">No CA staff found.</td></tr>'}</tbody>
+      </table>
+    </div>`;
 }
 
 // ════════════════════════════════════════════════════════════════
