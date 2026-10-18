@@ -606,9 +606,11 @@ body {
     <div>
       <label style="display:block;font-size:10px;color:var(--text-light);margin-bottom:3px;">Type</label>
       <select id="sumType" onchange="runSummary()" style="padding:6px 8px;border:1px solid var(--border);border-radius:5px;font-size:12px;">
-        <option value="">— Float &amp; Sitter —</option>
+        <option value="">— All Events —</option>
         <option value="Float">Float only</option>
         <option value="Sitter">Sitter only</option>
+        <option value="Mandation">Mandation only</option>
+        <option value="Refusal">Refusal only</option>
       </select>
     </div>
     <div>
@@ -1658,10 +1660,10 @@ async function runSummary() {
     return;
   }
 
-  let events = flattenSummaryEvents(entries, ['Float','Sitter'])
+  let events = flattenSummaryEvents(entries, ['Float','Sitter','Mandation','Refusal','Mandation Refusal','Mandation Refused'])
     .filter(e => e.date >= startISO && e.date <= endISO);
   if (selectedRole) events = events.filter(e => e.role === selectedRole);
-  if (selectedType) events = events.filter(e => e.type === selectedType);
+  if (selectedType) events = events.filter(e => selectedType === 'Refusal' ? /refus/i.test(e.type) : e.type === selectedType);
   const caMandation = buildCAMandationRows(entries, endISO);
 
   const selectedStaffName = document.getElementById('sumStaff').value;
@@ -1707,6 +1709,8 @@ function renderIndividualResults(staffName, staffEvents, caMandation) {
   const resultsEl = document.getElementById('summaryResults');
   const floats = staffEvents.filter(e => e.type === 'Float').length;
   const sitters = staffEvents.filter(e => e.type === 'Sitter').length;
+  const mandations = staffEvents.filter(e => e.type === 'Mandation').length;
+  const refusals = staffEvents.filter(e => /refus/i.test(e.type)).length;
   const staffRole = normalizeSummaryRole(staffEvents[0]?.role, staffName) || normalizeSummaryRole('', staffName);
   const caMandationRow = staffRole === 'CA' ? caMandation.rows.find(r => r.name === staffName) : null;
   const caMandationHtml = caMandationRow ? renderCAMandationPanel({
@@ -1721,7 +1725,7 @@ function renderIndividualResults(staffName, staffEvents, caMandation) {
       <tbody>
         ${staffEvents.map(e => `<tr><td>${fmtDisplayDate(e.date)}</td><td>${e.shift||'—'}</td><td>${e.type}</td><td>${e.unit}</td></tr>`).join('')}
       </tbody>
-    </table>` : `<div style="color:var(--text-light);font-size:12px;padding:10px 0 20px;">No float or sitter entries for ${staffName} in this range.</div>`;
+    </table>` : `<div style="color:var(--text-light);font-size:12px;padding:10px 0 20px;">No events for ${staffName} in this range.</div>`;
 
   resultsEl.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:10px;">
@@ -1737,12 +1741,14 @@ function renderIndividualResults(staffName, staffEvents, caMandation) {
         <div style="font-size:24px;font-weight:800;color:var(--teal-header);">${sitters}</div>
         <div style="font-size:11px;color:var(--text-light);">Sitters</div>
       </div>
+      <div style="background:var(--teal-row);border-radius:8px;padding:14px 22px;"><div style="font-size:24px;font-weight:800;color:var(--teal-header);">${mandations}</div><div style="font-size:11px;color:var(--text-light);">Mandations</div></div>
+      <div style="background:var(--teal-row);border-radius:8px;padding:14px 22px;"><div style="font-size:24px;font-weight:800;color:var(--teal-header);">${refusals}</div><div style="font-size:11px;color:var(--text-light);">Refusals</div></div>
       <div style="background:var(--teal-row);border-radius:8px;padding:14px 22px;">
         <div style="font-size:24px;font-weight:800;color:var(--teal-header);">${staffEvents.length}</div>
         <div style="font-size:11px;color:var(--text-light);">Total Events</div>
       </div>
     </div>
-    <div style="font-size:12px;font-weight:700;color:var(--teal-header);margin-bottom:6px;">All Float &amp; Sitter Days</div>
+    <div style="font-size:12px;font-weight:700;color:var(--teal-header);margin-bottom:6px;">All Float, Sitter, Mandation &amp; Refusal Dates</div>
     ${rows}
     ${caMandationHtml}
   `;
