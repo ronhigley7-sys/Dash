@@ -1590,15 +1590,15 @@ function caMandationWindow(referenceISO) {
   const ref = referenceISO || isoDate(new Date());
   const year = parseInt(ref.slice(0,4), 10) || new Date().getFullYear();
   const month = parseInt(ref.slice(5,7), 10) || 1;
-  if (month <= 6) {
-    return { start:`${year}-01-01`, end:`${year}-06-30`, label:`Jan 1 - Jun 30, ${year}` };
+  if (month < 6) {
+    return { start:`${year}-01-01`, end:`${year}-05-31`, label:`Jan 1 - May 31, ${year}` };
   }
-  return { start:`${year}-07-01`, end:`${year}-12-31`, label:`Jul 1 - Dec 31, ${year}` };
+  return { start:`${year}-06-01`, end:`${year}-12-31`, label:`Jun 1 - Dec 31, ${year}` };
 }
 
-function isMandationAssign(assign) {
+function isMandationRefusalAssign(assign) {
   const a = String(assign || '').toLowerCase();
-  return a.startsWith('mandat') && !a.includes('refus');
+  return a.includes('refus');
 }
 
 function buildCAMandationRows(entries, referenceISO) {
@@ -1612,7 +1612,7 @@ function buildCAMandationRows(entries, referenceISO) {
 
   function addMandation(source, assign) {
     if (!source?.date || source.date < win.start || source.date > win.end) return;
-    if (!isMandationAssign(assign)) return;
+    if (!isMandationRefusalAssign(assign)) return;
     const role = normalizeSummaryRole(source.role, source.staff);
     if (role !== 'CA') return;
     if (!byName[source.staff]) byName[source.staff] = { name:source.staff, count:0, dates:[] };
@@ -1820,10 +1820,10 @@ function renderCAMandationPanel(caMandation) {
 
   return `
     <div style="margin-top:4px;margin-bottom:20px;">
-      <div style="font-size:12px;font-weight:700;color:var(--teal-header);margin-bottom:4px;">CA Mandation Tracking — ${caMandation.window.label}</div>
-      <div style="font-size:11px;color:var(--text-light);margin-bottom:6px;">CA mandating limit: 2 times per 6-month period. First period runs Jan 1 through Jun 30; second period runs Jul 1 through Dec 31.</div>
+      <div style="font-size:12px;font-weight:700;color:var(--teal-header);margin-bottom:4px;">CA Mandation Refusal Tracking — ${caMandation.window.label}</div>
+      <div style="font-size:11px;color:var(--text-light);margin-bottom:6px;">CA refusal limit: 2 refused mandations per period. Only refusals count toward status and remaining allowance. Resets January 1 and June 1; periods run Jan 1–May 31 and Jun 1–Dec 31.</div>
       <table class="data-table" style="width:100%;margin-bottom:6px;">
-        <thead><tr><th>CA Staff</th><th>Mandations</th><th>Remaining</th><th>Last Mandation</th><th>Status</th></tr></thead>
+        <thead><tr><th>CA Staff</th><th>Refused Mandations</th><th>Remaining</th><th>Last Refusal</th><th>Status</th></tr></thead>
         <tbody>${tableRows || '<tr><td colspan="5" style="color:var(--text-light);">No CA staff found.</td></tr>'}</tbody>
       </table>
     </div>`;
