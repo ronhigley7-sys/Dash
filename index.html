@@ -1588,36 +1588,35 @@ function flattenSummaryEvents(entries, allowedTypes) {
 
 function caMandationWindow(referenceISO) {
   const ref = referenceISO || isoDate(new Date());
-  const year = parseInt(ref.slice(0,4), 10) || new Date().getFullYear();
-  const month = parseInt(ref.slice(5,7), 10) || 1;
-  if (month < 6) {
-    return { start:`${year}-01-01`, end:`${year}-05-31`, label:`Jan 1 - May 31, ${year}` };
-  }
-  return { start:`${year}-06-01`, end:`${year}-12-31`, label:`Jun 1 - Dec 31, ${year}` };
+  const year = ref.slice(0,4);
+  const start = `${year}-${Number(ref.slice(5,7)) < 6 ? '01' : '06'}-01`;
+  return { start, end:ref, label:`${fmtDisplayDate(start)} through ${fmtDisplayDate(ref)}` };
 }
 
 function isMandationRefusalAssign(assign) {
-  const a = String(assign || '').toLowerCase();
-  return a.includes('refus');
+  return String(assign || '').toLowerCase().includes('refus');
 }
 
 function buildCAMandationRows(entries, referenceISO) {
   const win = caMandationWindow(referenceISO);
-  const caStaff = getCCStaff()
-    .filter(s => String(s.job || '').toUpperCase() === 'CA')
-    .map(s => s.name)
-    .sort((a,b) => a.localeCompare(b));
-  const byName = {};
-  caStaff.forEach(name => { byName[name] = { name, count:0, dates:[] }; });
+  const ytdStart = win.end.slice(0,4) + '-01-01';
+  const byName = Object.create(null);
+  const newRow = name => ({ name, ytd:0, total:0, accepted:0, count:0, dates:[] });
+  getCCStaff().filter(s => String(s.job || '').toUpperCase() === 'CA')
+    .forEach(s => { byName[s.name] = newRow(s.name); });
 
   function addMandation(source, assign) {
-    if (!source?.date || source.date < win.start || source.date > win.end) return;
-    if (!isMandationRefusalAssign(assign)) return;
-    const role = normalizeSummaryRole(source.role, source.staff);
-    if (role !== 'CA') return;
-    if (!byName[source.staff]) byName[source.staff] = { name:source.staff, count:0, dates:[] };
-    byName[source.staff].count++;
-    byName[source.staff].dates.push(source.date);
+    if (!source?.date || source.date < ytdStart || source.date > win.end) return;
+    const refused = isMandationRefusalAssign(assign);
+    const accepted = !refused && String(assign || '').toLowerCase().startsWith('mandat');
+    if (!refused && !accepted) return;
+    if (normalizeSummaryRole(source.role, source.staff) !== 'CA') return;
+    const r = byName[source.staff] || (byName[source.staff] = newRow(source.staff));
+    r.ytd++;
+    if (source.date < win.start) return;
+    r.total++;
+    if (refused) { r.count++; r.dates.push(source.date); }
+    else r.accepted++;
   }
 
   for (const e of entries) {
@@ -1626,7 +1625,6 @@ function buildCAMandationRows(entries, referenceISO) {
       for (const ex of e.extraAssignments) addMandation(e, ex.assign);
     }
   }
-
   const rows = Object.values(byName).map(r => {
     r.dates.sort();
     r.lastDate = r.dates[r.dates.length - 1] || '';
@@ -1634,7 +1632,7 @@ function buildCAMandationRows(entries, referenceISO) {
     r.status = r.count > 2 ? 'Over limit' : r.count === 2 ? 'At limit' : 'Available';
     return r;
   }).sort((a,b) => (b.count - a.count) || b.lastDate.localeCompare(a.lastDate) || a.name.localeCompare(b.name));
-  return { window: win, rows };
+  return { window:win, rows };
 }
 
 async function runSummary() {
@@ -1664,7 +1662,7 @@ async function runSummary() {
     .filter(e => e.date >= startISO && e.date <= endISO);
   if (selectedRole) events = events.filter(e => e.role === selectedRole);
   if (selectedType) events = events.filter(e => selectedType === 'Refusal' ? /refus/i.test(e.type) : e.type === selectedType);
-  const caMandation = buildCAMandationRows(entries, endISO);
+  const caMandation = buildCAMandationRows(entries, isoDate(new Date()));
 
   const selectedStaffName = document.getElementById('sumStaff').value;
   if (selectedStaffName) {
@@ -1811,7 +1809,10 @@ function renderCAMandationPanel(caMandation) {
     const bg = r.count > 2 ? '#fee2e2' : r.count === 2 ? '#fef3c7' : '#e6f4f4';
     return `<tr>
       <td>${r.name}</td>
+      <td>${r.ytd}</td>
+      <td>${r.total}</td>
       <td style="font-weight:800;color:${color};">${r.count}</td>
+      <td>${r.accepted}</td>
       <td>${r.remaining}</td>
       <td>${r.lastDate ? fmtDisplayDate(r.lastDate) : '—'}</td>
       <td><span style="display:inline-block;background:${bg};color:${color};border-radius:12px;padding:2px 8px;font-weight:700;font-size:10px;">${r.status}</span></td>
@@ -1820,11 +1821,11 @@ function renderCAMandationPanel(caMandation) {
 
   return `
     <div style="margin-top:4px;margin-bottom:20px;">
-      <div style="font-size:12px;font-weight:700;color:var(--teal-header);margin-bottom:4px;">CA Mandation Refusal Tracking — ${caMandation.window.label}</div>
-      <div style="font-size:11px;color:var(--text-light);margin-bottom:6px;">CA refusal limit: 2 refused mandations per period. Only refusals count toward status and remaining allowance. Resets January 1 and June 1; periods run Jan 1–May 31 and Jun 1–Dec 31.</div>
+      <div style="font-size:12px;font-weight:700;color:var(--teal-header);margin-bottom:4px;">CA Mandation Tracking — ${caMandation.window.label}</div>
+      <div style="font-size:11px;color:var(--text-light);margin-bottom:6px;">YTD totals run January 1 through today. Period totals, refusals, and accepted mandations run from the latest January 1 or June 1 through today. Total = refused + accepted. Only refusals count toward the limit of 2 and determine Remaining and Status.</div>
       <table class="data-table" style="width:100%;margin-bottom:6px;">
-        <thead><tr><th>CA Staff</th><th>Refused Mandations</th><th>Remaining</th><th>Last Refusal</th><th>Status</th></tr></thead>
-        <tbody>${tableRows || '<tr><td colspan="5" style="color:var(--text-light);">No CA staff found.</td></tr>'}</tbody>
+        <thead><tr><th>CA Staff</th><th>Total Mandations YTD</th><th>Total This Period</th><th>Refused This Period</th><th>Accepted This Period</th><th>Remaining</th><th>Last Refusal</th><th>Status</th></tr></thead>
+        <tbody>${tableRows || '<tr><td colspan="8" style="color:var(--text-light);">No CA staff found.</td></tr>'}</tbody>
       </table>
     </div>`;
 }
