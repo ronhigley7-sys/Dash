@@ -878,11 +878,22 @@ function renderLPNTable() {
     </tr>`).join('');
 }
 
+// A CA can only be mandated once per week: not eligible for 7 days after last mandation.
+function mandationEligibility(lastMandation) {
+  const d = parseDate(lastMandation);
+  if (!d) return null;
+  const now = new Date(); now.setHours(0,0,0,0);
+  const days = Math.round((now - d) / 86400000);
+  if (days < 0 || days >= 7) return null;
+  const until = new Date(d.getTime() + 7*86400000);
+  return `${until.getMonth()+1}/${until.getDate()}`;
+}
+
 function renderCATable() {
   const tbody = document.getElementById('caBody');
   tbody.innerHTML = data.ca.map((r, i) => `
     <tr class="${r.highlighted ? 'highlighted' : ''}">
-      <td>${r.name}</td>
+      <td>${r.name}${(() => { const u = mandationEligibility(r.mandation); return u ? ` <span title="Mandated within the last 7 days — only 1 mandation per week" style="display:inline-block;background:#fee2e2;color:#b91c1c;border-radius:12px;padding:2px 8px;font-weight:700;font-size:10px;margin-left:6px;white-space:nowrap;">🚫 Not eligible for mandation until ${u}</span>` : ''; })()}</td>
       <td class="date-cell editable-cell" onclick="editCell('ca',${i},'float',this)">${displayDate(r.float)}</td>
       <td class="date-cell editable-cell" onclick="editCell('ca',${i},'sitter',this)">${displayDate(r.sitter)}</td>
       <td class="date-cell editable-cell" onclick="editCell('ca',${i},'calloff',this)">${displayDate(r.calloff)}</td>
@@ -1636,8 +1647,8 @@ function buildCAMandationRows(entries, referenceISO) {
   const rows = Object.values(byName).map(r => {
     r.dates.sort();
     r.lastDate = r.dates[r.dates.length - 1] || '';
-    r.remaining = Math.max(0, 2 - r.count);
-    r.status = r.count > 2 ? 'Over limit' : r.count === 2 ? 'At limit' : 'Available';
+    r.remaining = Math.max(0, 2 - r.refusals);
+    r.status = r.refusals > 2 ? 'Over limit' : r.refusals === 2 ? 'At limit' : 'Available';
     return r;
   }).sort((a,b) => (b.refusals - a.refusals) || (b.count - a.count) || b.lastDate.localeCompare(a.lastDate) || a.name.localeCompare(b.name));
   return { window: win, rows };
@@ -1813,12 +1824,12 @@ function renderCAMandationPanel(caMandation) {
   const rows = caMandation.rows || [];
   const visibleRows = caMandation.compact ? rows : rows;
   const tableRows = visibleRows.map(r => {
-    const color = r.count > 2 ? '#b91c1c' : r.count === 2 ? '#92400e' : 'var(--teal-header)';
-    const bg = r.count > 2 ? '#fee2e2' : r.count === 2 ? '#fef3c7' : '#e6f4f4';
+    const color = r.refusals > 2 ? '#b91c1c' : r.refusals === 2 ? '#92400e' : 'var(--teal-header)';
+    const bg = r.refusals > 2 ? '#fee2e2' : r.refusals === 2 ? '#fef3c7' : '#e6f4f4';
     return `<tr>
       <td>${r.name}</td>
-      <td style="font-weight:800;color:var(--teal-header);">${r.refusals || 0}</td>
-      <td style="font-weight:800;color:${color};">${r.count}</td>
+      <td style="font-weight:800;color:${color};">${r.refusals || 0}</td>
+      <td style="font-weight:800;color:var(--teal-header);">${r.count}</td>
       <td>${r.remaining}</td>
       <td>${r.lastDate ? fmtDisplayDate(r.lastDate) : '—'}</td>
       <td><span style="display:inline-block;background:${bg};color:${color};border-radius:12px;padding:2px 8px;font-weight:700;font-size:10px;">${r.status}</span></td>
@@ -1828,7 +1839,7 @@ function renderCAMandationPanel(caMandation) {
   return `
     <div style="margin-top:4px;margin-bottom:20px;">
       <div style="font-size:12px;font-weight:700;color:var(--teal-header);margin-bottom:4px;">CA Mandation Tracking — ${caMandation.window.label}</div>
-      <div style="font-size:11px;color:var(--text-light);margin-bottom:6px;">CA mandating limit: 2 times per 6-month period. First period runs Jan 1 through Jun 30; second period runs Jul 1 through Dec 31.</div>
+      <div style="font-size:11px;color:var(--text-light);margin-bottom:6px;">CA mandation refusal limit: 2 per 6-month period. A CA can be mandated only once per week. First period runs Jan 1 through Jun 30; second period runs Jul 1 through Dec 31.</div>
       <table class="data-table" style="width:100%;margin-bottom:6px;">
         <thead><tr><th>CA Staff</th><th>Refusals</th><th>Mandations</th><th>Remaining</th><th>Last Mandation</th><th>Status</th></tr></thead>
         <tbody>${tableRows || '<tr><td colspan="6" style="color:var(--text-light);">No CA staff found.</td></tr>'}</tbody>
