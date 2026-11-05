@@ -878,22 +878,23 @@ function renderLPNTable() {
     </tr>`).join('');
 }
 
-// A CA can only be mandated once per week: not eligible for 7 days after last mandation.
+// A CA can only be mandated once per calendar week (Sun–Sat): not eligible for the rest of that week.
 function mandationEligibility(lastMandation) {
   const d = parseDate(lastMandation);
   if (!d) return null;
   const now = new Date(); now.setHours(0,0,0,0);
-  const days = Math.round((now - d) / 86400000);
-  if (days < 0 || days >= 7) return null;
-  const until = new Date(d.getTime() + 7*86400000);
-  return `${until.getMonth()+1}/${until.getDate()}`;
+  const weekStart = x => new Date(x.getFullYear(), x.getMonth(), x.getDate() - x.getDay());
+  const ws = weekStart(d);
+  if (ws.getTime() !== weekStart(now).getTime()) return null;
+  const next = new Date(ws.getFullYear(), ws.getMonth(), ws.getDate() + 7);
+  return `${next.getMonth()+1}/${next.getDate()}`;
 }
 
 function renderCATable() {
   const tbody = document.getElementById('caBody');
   tbody.innerHTML = data.ca.map((r, i) => `
     <tr class="${r.highlighted ? 'highlighted' : ''}">
-      <td>${r.name}${(() => { const u = mandationEligibility(r.mandation); return u ? ` <span title="Mandated within the last 7 days — only 1 mandation per week" style="display:inline-block;background:#fee2e2;color:#b91c1c;border-radius:12px;padding:2px 8px;font-weight:700;font-size:10px;margin-left:6px;white-space:nowrap;">🚫 Not eligible for mandation until ${u}</span>` : ''; })()}</td>
+      <td>${r.name}${(() => { const u = mandationEligibility(r.mandation); return u ? ` <span title="Already mandated this calendar week (Sun–Sat) — only 1 mandation per week" style="display:inline-block;background:#fee2e2;color:#b91c1c;border-radius:12px;padding:2px 8px;font-weight:700;font-size:10px;margin-left:6px;white-space:nowrap;">🚫 Not eligible for mandation until ${u}</span>` : ''; })()}</td>
       <td class="date-cell editable-cell" onclick="editCell('ca',${i},'float',this)">${displayDate(r.float)}</td>
       <td class="date-cell editable-cell" onclick="editCell('ca',${i},'sitter',this)">${displayDate(r.sitter)}</td>
       <td class="date-cell editable-cell" onclick="editCell('ca',${i},'calloff',this)">${displayDate(r.calloff)}</td>
