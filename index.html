@@ -1601,6 +1601,10 @@ function isMandationAssign(assign) {
   return a.startsWith('mandat') && !a.includes('refus');
 }
 
+function isRefusalAssign(assign) {
+  return /refus/i.test(String(assign || ''));
+}
+
 function buildCAMandationRows(entries, referenceISO) {
   const win = caMandationWindow(referenceISO);
   const caStaff = getCCStaff()
@@ -1608,14 +1612,16 @@ function buildCAMandationRows(entries, referenceISO) {
     .map(s => s.name)
     .sort((a,b) => a.localeCompare(b));
   const byName = {};
-  caStaff.forEach(name => { byName[name] = { name, count:0, dates:[] }; });
+  caStaff.forEach(name => { byName[name] = { name, count:0, dates:[], refusals:0 }; });
 
   function addMandation(source, assign) {
     if (!source?.date || source.date < win.start || source.date > win.end) return;
-    if (!isMandationAssign(assign)) return;
+    const isMand = isMandationAssign(assign), isRef = isRefusalAssign(assign);
+    if (!isMand && !isRef) return;
     const role = normalizeSummaryRole(source.role, source.staff);
     if (role !== 'CA') return;
-    if (!byName[source.staff]) byName[source.staff] = { name:source.staff, count:0, dates:[] };
+    if (!byName[source.staff]) byName[source.staff] = { name:source.staff, count:0, dates:[], refusals:0 };
+    if (isRef) { byName[source.staff].refusals++; return; }
     byName[source.staff].count++;
     byName[source.staff].dates.push(source.date);
   }
@@ -1633,7 +1639,7 @@ function buildCAMandationRows(entries, referenceISO) {
     r.remaining = Math.max(0, 2 - r.count);
     r.status = r.count > 2 ? 'Over limit' : r.count === 2 ? 'At limit' : 'Available';
     return r;
-  }).sort((a,b) => (b.count - a.count) || b.lastDate.localeCompare(a.lastDate) || a.name.localeCompare(b.name));
+  }).sort((a,b) => (b.refusals - a.refusals) || (b.count - a.count) || b.lastDate.localeCompare(a.lastDate) || a.name.localeCompare(b.name));
   return { window: win, rows };
 }
 
@@ -1811,6 +1817,7 @@ function renderCAMandationPanel(caMandation) {
     const bg = r.count > 2 ? '#fee2e2' : r.count === 2 ? '#fef3c7' : '#e6f4f4';
     return `<tr>
       <td>${r.name}</td>
+      <td style="font-weight:800;color:var(--teal-header);">${r.refusals || 0}</td>
       <td style="font-weight:800;color:${color};">${r.count}</td>
       <td>${r.remaining}</td>
       <td>${r.lastDate ? fmtDisplayDate(r.lastDate) : '—'}</td>
@@ -1823,8 +1830,8 @@ function renderCAMandationPanel(caMandation) {
       <div style="font-size:12px;font-weight:700;color:var(--teal-header);margin-bottom:4px;">CA Mandation Tracking — ${caMandation.window.label}</div>
       <div style="font-size:11px;color:var(--text-light);margin-bottom:6px;">CA mandating limit: 2 times per 6-month period. First period runs Jan 1 through Jun 30; second period runs Jul 1 through Dec 31.</div>
       <table class="data-table" style="width:100%;margin-bottom:6px;">
-        <thead><tr><th>CA Staff</th><th>Mandations</th><th>Remaining</th><th>Last Mandation</th><th>Status</th></tr></thead>
-        <tbody>${tableRows || '<tr><td colspan="5" style="color:var(--text-light);">No CA staff found.</td></tr>'}</tbody>
+        <thead><tr><th>CA Staff</th><th>Refusals</th><th>Mandations</th><th>Remaining</th><th>Last Mandation</th><th>Status</th></tr></thead>
+        <tbody>${tableRows || '<tr><td colspan="6" style="color:var(--text-light);">No CA staff found.</td></tr>'}</tbody>
       </table>
     </div>`;
 }
